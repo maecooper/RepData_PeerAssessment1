@@ -11,8 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r results='hide'}
-library(lubridate)
-library(stringr)
+library(lubridate, quietly = TRUE)
+library(stringr, quietly = TRUE)
 
 #get data
 temp <- tempfile()
@@ -35,7 +35,7 @@ This is an analysis of the number of steps taken throughout the day, based singl
 First, we will examine total steps in a day. The distribution of steps per day looks like this:
 
 ```{r}
-library(ggplot2)
+library(ggplot2, quietly = TRUE)
 
 #summarize steps per day
 daysteps<- with(activity2,tapply(steps,date,sum))
@@ -54,28 +54,64 @@ The number of daily steps has a mean of `r format(mn, scientific=FALSE, big.mark
 Next, the average number of steps over the course of a day:  
   
 ```{r}
-#library(magrittr)
-library(dplyr)
+library(plyr, quietly = TRUE)
+library(dplyr, quietly = TRUE)
 
-#summarize steps per interval
+
+#summarize steps per interval - mean and standard deviation
 timesteps<- activity2 %>% 
             group_by(as.character(interval)) %>% 
-            summarize(mn_steps=mean(steps)) %>% 
-            rename(interval="as.character(interval)") %>%
-            mutate(time_interval=case_when(
-                              is.na(hms(interval)) & is.na(ms(interval)) ~ hms("00:00:00"),
-                              is.na(hms(interval)) & !is.na(ms(interval)) ~ ms(interval),
-                              TRUE ~ hms(interval)))%>%
-            arrange(as_datetime(time_interval))
+            summarize(mn_steps=mean(steps),std_step=sd(steps)) %>% 
+            rename(interval_chr="as.character(interval)") %>%
+            mutate(interval=case_when(
+                  is.na(hms(interval_chr)) & is.na(ms(interval_chr)) ~ hms("00:00:00"),
+                  is.na(hms(interval_chr)) & !is.na(ms(interval_chr)) ~ ms(interval_chr),
+                  TRUE ~ hms(interval_chr)))%>%
+            arrange(as_datetime(interval))
 
 #plot
-plot(as_datetime(timesteps$time_interval),timesteps$mn_steps, type='l',
+plot(as_datetime(timesteps$interval),timesteps$mn_steps, type='l',
      main="Average Steps Across the Day", ylab = "Steps", xlab = "Time",
      col="red", lwd=2.5)
 
 #get max stats
 max<- max(timesteps$mn_steps)
-timeMax<- as_datetime(timesteps$time_interval)[timesteps$mn_steps==max]
+timeMax<- as_datetime(timesteps$interval)[timesteps$mn_steps==max]
 ```
   
 On average, steps peak at `r format(timeMax,"%H:%M")` with `r format(max,digits=0)` steps.
+
+```{r results='hide'}
+#number of rows with missing values
+NA_rows<- length(activity$steps[is.na(activity$steps)])
+
+#create variables for merging
+timesteps$mg<- as_datetime(timesteps$interval)
+activity$mg<-  as_datetime(activity$interval)
+
+#merge activity data with summary data
+activity3<-merge(activity, timesteps, by="mg",all=TRUE)
+activity3<- activity3%>%
+      select(steps,date,interval.x,mn_steps,std_step)%>%
+      arrange(date,as_datetime(interval.x))%>%
+
+#simulate missing values using mean of each time interval with poisson distribution
+mutate(new_steps=ifelse(!is.na(steps),steps,rpois(10000,lambda=mn_steps)))
+
+#get average statistics, including imputed data
+daysteps2<- with(activity3,tapply(new_steps,date,sum))
+mn2<- round(mean(daysteps2),0)
+md2<- median(daysteps2)
+```
+With the missing days, there are `r NA_rows` rows with missing values.  
+  
+We can impute the missing data by picking from a poisson distribution based on the 
+average number of steps for each interval. If we do so, the distribution of steps per day looks like this:
+
+```{r}
+qplot(daysteps2, main="Total Daily Steps (with imputed data)", ylab = "Days", xlab = "Steps",
+      bins=25, fill=I("dark green"), col=I("gray"))
+```
+
+We can see that this increases the number of days that are close to the center of the distribution, since the imputed days are based on mean tendencies. The new mean, `r format(mn, scientific=FALSE, big.mark = ",")`, and median, `r format(md,big.mark = ",")`, are fairly similar to the old mean and median. It is only the variation that has decreased.
+
