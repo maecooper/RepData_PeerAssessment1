@@ -1,0 +1,41 @@
+---
+title: "Steps Analysis"
+author: "P. Mae Cooper"
+date: "November 5, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r results='hide'}
+library(lubridate)
+
+temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp)
+activity<- read.csv(unz(temp, "activity.csv"))
+unlink(temp)
+
+activity$date<- ymd(activity$date)
+activity2<- subset(activity,is.na(activity$steps)==FALSE)
+```
+  
+This is an analysis of the number of steps taken throughout the day, based single person's activity. The data cover 53 days between October 2nd and November 29th, 2012.There was no data recorded on October 8th, or November 1st, 4th, 9th, 10th, or 14th.  
+  
+First, we will examine total steps in a day. The distribution of steps per day looks like this:
+
+```{r}
+library(ggplot2)
+totsteps<- with(activity2,tapply(steps,date,sum))
+qplot(totsteps, main="Total Steps Taken Each Day", ylab = "Days", xlab = "Steps",
+      bins=25, fill=I("dark green"), col=I("gray"))
+```
+
+```{r results='hide'}
+mn<- round(mean(totsteps),0)
+md<- median(totsteps)
+```
+  
+The number of steps per day has a mean of `r format(mn, scientific=FALSE, big.mark = ",")` and a median of `r format(md,big.mark = ",")`.
