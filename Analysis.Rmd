@@ -12,13 +12,21 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r results='hide'}
 library(lubridate)
+library(stringr)
 
+#get data
 temp <- tempfile()
 download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp)
 activity<- read.csv(unz(temp, "activity.csv"))
 unlink(temp)
 
+#format dates and times
 activity$date<- ymd(activity$date)
+
+activity$interval<- str_pad(activity$interval, 4, pad = "0")
+activity$interval<- hm(paste(substr(activity$interval,1,2),":",substr(activity$interval,3,4)))
+
+#create version without missing days
 activity2<- subset(activity,is.na(activity$steps)==FALSE)
 ```
   
@@ -28,14 +36,46 @@ First, we will examine total steps in a day. The distribution of steps per day l
 
 ```{r}
 library(ggplot2)
-totsteps<- with(activity2,tapply(steps,date,sum))
-qplot(totsteps, main="Total Steps Taken Each Day", ylab = "Days", xlab = "Steps",
-      bins=25, fill=I("dark green"), col=I("gray"))
-```
 
-```{r results='hide'}
-mn<- round(mean(totsteps),0)
-md<- median(totsteps)
+#summarize steps per day
+daysteps<- with(activity2,tapply(steps,date,sum))
+
+#plot
+qplot(daysteps, main="Total Daily Steps", ylab = "Days", xlab = "Steps",
+      bins=25, fill=I("dark green"), col=I("gray"))
+
+#get average statistics
+mn<- round(mean(daysteps),0)
+md<- median(daysteps)
 ```
   
-The number of steps per day has a mean of `r format(mn, scientific=FALSE, big.mark = ",")` and a median of `r format(md,big.mark = ",")`.
+The number of daily steps has a mean of `r format(mn, scientific=FALSE, big.mark = ",")` and a median of `r format(md,big.mark = ",")`.  
+  
+Next, the average number of steps over the course of a day:  
+  
+```{r}
+#library(magrittr)
+library(dplyr)
+
+#summarize steps per interval
+timesteps<- activity2 %>% 
+            group_by(as.character(interval)) %>% 
+            summarize(mn_steps=mean(steps)) %>% 
+            rename(interval="as.character(interval)") %>%
+            mutate(time_interval=case_when(
+                              is.na(hms(interval)) & is.na(ms(interval)) ~ hms("00:00:00"),
+                              is.na(hms(interval)) & !is.na(ms(interval)) ~ ms(interval),
+                              TRUE ~ hms(interval)))%>%
+            arrange(as_datetime(time_interval))
+
+#plot
+plot(as_datetime(timesteps$time_interval),timesteps$mn_steps, type='l',
+     main="Average Steps Across the Day", ylab = "Steps", xlab = "Time",
+     col="red", lwd=2.5)
+
+#get max stats
+max<- max(timesteps$mn_steps)
+timeMax<- as_datetime(timesteps$time_interval)[timesteps$mn_steps==max]
+```
+  
+On average, steps peak at `r format(timeMax,"%H:%M")` with `r format(max,digits=0)` steps.
