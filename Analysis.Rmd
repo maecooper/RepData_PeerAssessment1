@@ -118,7 +118,7 @@ We can see that this increases the number of days that are close to the center o
 It is possible that our imputation might be more accurate if we took into account the day of the week. Let's see if there is a difference in activity between weekend and weekday activity. This analysis uses the imputed data.  
 
 ```{r}
-library(lattice)
+library(lattice, quietly = TRUE)
 
 #add variable for weekend status
 activity3<- mutate(activity3,weekday=as.factor(case_when(
